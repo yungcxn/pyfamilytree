@@ -1,151 +1,68 @@
-import matplotlib.pyplot as plt
+from tree import build_tree, parse_csv, build_levelmap
 
-class Person:
-  def __init__(self, surname, lastname, babyname, birthdate, deathdate, living_at, ismale, father, mother, child):
-    self.surname = surname.strip()
-    self.lastname = lastname.strip()
-    self.babyname = babyname.strip()
-    self.birthdate = birthdate.strip()
-    self.deathdate = deathdate.strip()
-    self.living_at = living_at.strip()
-    self.ismale = ismale.strip().lower() == 'true'
-    self.father = father.strip()
-    self.mother = mother.strip()
-    self.child = child.strip()
-
-  def out(self):
-    name = self.surname
-    name += f" {self.lastname}" if self.lastname else ""
-    name += f" ({self.babyname})" if self.babyname else ""
-    name += "\n"
-    birth = self.birthdate if self.birthdate else "?"
-    death = self.deathdate if self.deathdate else "?"
-    birthdeath = f"{birth} - {death}"
-    return f"{name} ({birthdeath})\n{self.living_at}"
-  
-  def name(self):
-    return self.surname + " " + self.lastname
-
-class TreeNode:
-  def __init__(self, o, l=None, r=None):
-    self.o = o
-    self.l = l
-    self.r = r
-
-def build_tree(value_matrix):
-  person_list = []
-  for i in range(len(value_matrix)):
-    try:
-      person_list.append(Person(*value_matrix[i]))
-    except Exception as e:
-      print(f"Faulty line number {str(i)} {str(value_matrix[i])}")
+import svgwrite
+import cairosvg
     
-  me = person_list[0]
-  while me.child:
-    found = False
-    for p in person_list:
-      if p.name() == me.child:
-        me = p
-        person_list.remove(p)
-        found = True
-        break
-    if not found:
-      break
+
+def draw_box(dwg, x, y, w, h, text, fontsize=20, color="green"):
+  dwg.add(dwg.rect((x, y), (w, h), stroke="black", fill=color))
+  # Text data
+  lines = text.split("\n")
+  # Font and text positioning
+  line_height = fontsize + 5  # Adjusting line height
+  text_x = x + w / 2  # Center horizontally
+  text_y = y + (h - (line_height * len(lines))) / 2 + fontsize  # Center vertically
   
-  tree_root = TreeNode(me)
-  queue = [tree_root]
-  while person_list and queue:
-    c = queue.pop(0)
-    to_remove = []
-    for p in person_list:
-      if p.child == c.o.name():
-        if c.o.father == p.name() and p.ismale:
-          c.l = TreeNode(p)
-          queue.append(c.l)
-          to_remove.append(p)
-        elif c.o.mother == p.name() and not p.ismale:
-          c.r = TreeNode(p)
-          queue.append(c.r)
-          to_remove.append(p)
-    for p in to_remove:
-      person_list.remove(p)
-  return tree_root
+  for i, line in enumerate(lines):
+    dwg.add(dwg.text(line, insert=(text_x, text_y + i * line_height), text_anchor="middle", font_size=fontsize, fill="black"))
 
-def parse_csv(file):
-  with open(file, "r") as f:
-    lines = f.readlines()
-    lines = [line.strip() for line in lines if line.strip()]
-    lines = [line for line in lines if not line.startswith("#")]
-    lines = [ [elem.strip() for elem in line.split(",")] for line in lines]
-    return lines
+def draw_arrow(dwg, x1, y1, x2, y2):
+  dwg.add(dwg.line((x1, y1), (x2, y2), stroke="black", stroke_width=3))
 
-import matplotlib.pyplot as plt
+def draw_family_tree(tree_root, tree_height):
+  BOX_WIDTH = 200
+  BOX_HEIGHT = 100
+  BOX_MARGIN = 10
+  BOX_DIST = BOX_MARGIN * 2
+  max_level_cells = (2 ** tree_height)
+  max_width = max_level_cells * (BOX_WIDTH + BOX_DIST)
+  max_height = (tree_height + 1) * (BOX_DIST + BOX_HEIGHT)
+  dwg = svgwrite.Drawing("family.svg", size=(f"{max_width}px", f"{max_height}px"))
+  # draw all white
+  dwg.add(dwg.rect((0, 0), (max_width, max_height), fill="white"))
 
-def plot_tree(node, x=0, y=0, dx=5, dy=2, level=0, positions=None, labels=None, colors=None, depth_factor=1, side=None):
-  if positions is None:
-    positions = {}
-  if labels is None:
-    labels = {}
-  if colors is None:
-    colors = {}
+  def draw_recursive(dwg, node, x, y, ox, oy, level):
+    if node:
+      color = "green"
+      if node.o.ismale:
+        color = "lightblue"
+      elif not node.o.ismale:
+        color = "pink"
 
-  # Place the current node
-  positions[node] = (x, y)
-  labels[node] = node.o.out()
+      draw_box(dwg, x, y, BOX_WIDTH, BOX_HEIGHT, node.o.out(),color=color)
+      if level > 1:
+        draw_arrow(dwg, x + BOX_WIDTH / 2, y + BOX_HEIGHT, ox + BOX_WIDTH / 2 + (-20 if x <= ox else +20), oy)
 
-  # Set the color of the node
-  if level == 0:
-    colors[node] = 'lightgreen'  # Root node
-  elif side == 'left':
-    colors[node] = 'lightblue'  # Left nodes
-  elif side == 'right':
-    colors[node] = 'lightcoral'  # Right nodes (light red)
+      newy = y - BOX_HEIGHT - BOX_DIST
+      if node.l:
+        newx = x + BOX_WIDTH / 2 - max_width / (2 ** (level+1)) - BOX_WIDTH / 2
+        draw_recursive(dwg, node.l, newx, newy, x, y, level + 1)
+      if node.r:
+        newx = x + BOX_WIDTH / 2 + max_width / (2 ** (level+1)) - BOX_WIDTH / 2
+        draw_recursive(dwg, node.r, newx, newy, x, y, level + 1)
 
-  # Adjust the horizontal distance based on the depth of the tree
-  adjusted_dx = dx / (2 ** level) * depth_factor
+  draw_recursive(dwg, tree_root, max_width / 2 - BOX_WIDTH / 2, max_height - BOX_MARGIN - BOX_HEIGHT, 0, 0, 1)
 
-  # Plot left (father)
-  if node.l is not None:
-    # Arrow from father to child (pointing downwards)
-    plt.arrow(x - adjusted_dx, y + dy, adjusted_dx, -dy, head_width=0.2, head_length=0.2, fc='black', ec='black')
-    plot_tree(node.l, x - adjusted_dx, y + dy, dx, dy, level + 1, positions, labels, colors, depth_factor, side='left')
-
-  # Plot right (mother)
-  if node.r is not None:
-    # Arrow from mother to child (pointing downwards)
-    plt.arrow(x + adjusted_dx, y + dy, -adjusted_dx, -dy, head_width=0.2, head_length=0.2, fc='black', ec='black')
-    plot_tree(node.r, x + adjusted_dx, y + dy, dx, dy, level + 1, positions, labels, colors, depth_factor, side='right')
-
-  return positions, labels, colors
-
-def draw_family_tree(tree_root, depth_factor=1):
-  plt.figure(figsize=(10, 8))
-
-  # Generate the positions, labels, and colors
-  positions, labels, colors = plot_tree(tree_root, depth_factor=depth_factor)
-
-  # Draw nodes as circles with different colors
-  for node, (x, y) in positions.items():
-    plt.scatter(x, y, s=2000, color=colors[node], edgecolor='black', zorder=2)
-    plt.text(x, y, labels[node], ha="center", va="center", fontsize=8, bbox=dict(facecolor=colors[node], edgecolor="black", boxstyle="round,pad=0.5"))
-
-  # Set axis limits and make the tree aesthetically pleasing
-  plt.xlim(-10 * depth_factor, 10 * depth_factor)
-  plt.ylim(-10 * depth_factor, 10 * depth_factor)
-  plt.axis('off')  # Turn off axis
-
-  # make title big and fancy
-  plt.title("Family Tree - " + tree_root.o.name(), fontdict={'fontsize': 20, 'fontweight': 'bold'})
-  # save plot as svg
-  plt.savefig("family_tree.svg")
-  plt.savefig("family_tree.png")
-  # show plot
-  plt.show()
+  # Save the SVG
+  dwg.save()
+  
+  # render as png
+  cairosvg.svg2png(url="family.svg", write_to="family.png")
 
 def main():
-  tree = build_tree(parse_csv("family.csv"))
-  draw_family_tree(tree)
-
+  tree_root = build_tree(parse_csv("family.csv"))
+  level_map = build_levelmap(tree_root)
+  draw_family_tree(tree_root, max(level_map.keys()))
 
 if __name__ == "__main__":
   main()
