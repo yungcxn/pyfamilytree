@@ -20,7 +20,7 @@ def draw_arrow(dwg, x1, y1, x2, y2):
   dwg.add(dwg.line((x1, y1), (x2, y2), stroke="black", stroke_width=3))
 
 def draw_family_tree(tree_root, tree_height):
-  BOX_WIDTH = 200
+  BOX_WIDTH = 220
   BOX_HEIGHT = 100
   BOX_MARGIN = 10
   BOX_DIST = BOX_MARGIN * 2

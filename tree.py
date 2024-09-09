@@ -1,5 +1,5 @@
 class Person:
-  def __init__(self, surname, lastname, babyname, birthdate, deathdate, living_at, ismale, father, mother, child):
+  def __init__(self, surname, lastname, babyname, birthdate, deathdate, living_at, ismale, father, mother, *children):
     self.surname = surname.strip()
     self.lastname = lastname.strip()
     self.babyname = babyname.strip()
@@ -9,7 +9,7 @@ class Person:
     self.ismale = ismale.strip().lower() == 'true'
     self.father = father.strip()
     self.mother = mother.strip()
-    self.child = child.strip()
+    self.children = [c.strip() for c in children] if children else []
 
   def out(self):
     name = self.surname
@@ -18,8 +18,8 @@ class Person:
     name += "\n"
     birth = self.birthdate if self.birthdate else "?"
     death = self.deathdate if self.deathdate else "?"
-    birthdeath = f"{birth} - {death}"
-    return f"{name} ({birthdeath})\n{self.living_at}"
+    birthdeath = "" if birth == "?" and death == "?" else f"{birth}-{death}\n"
+    return f"{name}{birthdeath}{self.living_at}"
   
   def name(self):
     return self.surname if self.lastname == '' else self.surname + " " + self.lastname
@@ -39,10 +39,10 @@ def build_tree(value_matrix):
       print(f"Faulty line number {str(i)} {str(value_matrix[i])}")
       
   me = person_list[0]
-  while me.child:
+  while me.children:
     found = False
     for p in person_list:
-      if p.name() == me.child:
+      if p.name() == me.children[0]:
         me = p
         person_list.remove(p)
         found = True
@@ -52,21 +52,17 @@ def build_tree(value_matrix):
   
   tree_root = TreeNode(me)
   queue = [tree_root]
-  while person_list and queue:
+  while queue:
     c = queue.pop(0)
-    to_remove = []
     for p in person_list:
-      if p.child == c.o.name():
-        if c.o.father == p.name() and p.ismale:
-          c.l = TreeNode(p)
-          queue.append(c.l)
-          to_remove.append(p)
-        elif c.o.mother == p.name() and not p.ismale:
-          c.r = TreeNode(p)
-          queue.append(c.r)
-          to_remove.append(p)
-    for p in to_remove:
-      person_list.remove(p)
+      for child in p.children:
+        if child == c.o.name():
+          if c.o.father == p.name() and p.ismale:
+            c.l = TreeNode(p)
+            queue.append(c.l)
+          elif c.o.mother == p.name() and not p.ismale:
+            c.r = TreeNode(p)
+            queue.append(c.r)
   return tree_root
 
 def build_levelmap(tree_root):
